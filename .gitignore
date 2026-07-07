@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+._*
+
+# Swift Package Manager build output
+.build/
+
+# SwiftPM / Xcode local workspace state
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+DerivedData/
+
+# Packaged app bundles generated locally
+DeployBar.app/
+*.app/
+
+# Icon generation intermediates
+Resources/*.iconset/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
