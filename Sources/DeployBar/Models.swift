@@ -54,6 +54,50 @@ struct DeploymentHistoryItem: Codable, Identifiable, Equatable {
     var log: String
 }
 
+struct DeploymentHistoryRecord: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var projectName: String
+    var environmentName: String
+    var startedAt: Date
+    var finishedAt: Date
+    var succeeded: Bool
+    var summary: String
+    var logCharacterCount: Int?
+
+    init(
+        id: UUID = UUID(),
+        projectName: String,
+        environmentName: String,
+        startedAt: Date,
+        finishedAt: Date,
+        succeeded: Bool,
+        summary: String,
+        logCharacterCount: Int? = nil
+    ) {
+        self.id = id
+        self.projectName = projectName
+        self.environmentName = environmentName
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+        self.succeeded = succeeded
+        self.summary = summary
+        self.logCharacterCount = logCharacterCount
+    }
+
+    init(item: DeploymentHistoryItem) {
+        self.init(
+            id: item.id,
+            projectName: item.projectName,
+            environmentName: item.environmentName,
+            startedAt: item.startedAt,
+            finishedAt: item.finishedAt,
+            succeeded: item.succeeded,
+            summary: item.summary,
+            logCharacterCount: item.log.count
+        )
+    }
+}
+
 enum StepRunState: String, Equatable {
     case pending = "Pending"
     case running = "Running"
@@ -68,4 +112,3 @@ struct StepRunStatus: Identifiable, Equatable {
     var state: StepRunState
     var exitCode: Int32?
 }
-

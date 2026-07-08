@@ -112,14 +112,80 @@ struct ConsoleTextView: View {
     let placeholder: String
 
     var body: some View {
-        ScrollView {
-            Text(text.isEmpty ? placeholder : text)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(text.isEmpty ? .secondary : .primary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+        ConsoleTextRepresentable(text: text, placeholder: placeholder)
+            .background(Color(nsColor: .textBackgroundColor))
+    }
+}
+
+private struct ConsoleTextRepresentable: NSViewRepresentable {
+    let text: String
+    let placeholder: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = .textBackgroundColor
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.drawsBackground = false
+        textView.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        textView.textColor = .labelColor
+        textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.autoresizingMask = [.width]
+        textView.isHorizontallyResizable = true
+        textView.isVerticallyResizable = true
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        context.coordinator.update(text: text, placeholder: placeholder)
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.update(text: text, placeholder: placeholder)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        weak var textView: NSTextView?
+        private var displayedText: String?
+
+        func update(text: String, placeholder: String) {
+            guard let textView else { return }
+
+            let nextText = text.isEmpty ? placeholder : text
+            guard displayedText != nextText else { return }
+
+            let shouldFollowTail = isScrolledNearBottom(textView)
+            displayedText = nextText
+            textView.string = nextText
+            textView.textColor = text.isEmpty ? .secondaryLabelColor : .labelColor
+
+            if shouldFollowTail {
+                textView.scrollToEndOfDocument(nil)
+            }
         }
-        .background(Color(nsColor: .textBackgroundColor))
+
+        private func isScrolledNearBottom(_ textView: NSTextView) -> Bool {
+            guard let scrollView = textView.enclosingScrollView else { return true }
+            let visibleMaxY = scrollView.contentView.bounds.maxY
+            let documentHeight = textView.bounds.height
+            return documentHeight - visibleMaxY < 40
+        }
     }
 }

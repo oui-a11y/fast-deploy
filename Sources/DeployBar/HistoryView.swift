@@ -2,10 +2,11 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject private var store: ProjectStore
-    @State private var selectedItemID: DeploymentHistoryItem.ID?
+    @State private var selectedItemID: DeploymentHistoryRecord.ID?
+    @State private var selectedLog = ""
     @State private var showClearAllConfirmation = false
 
-    private var selectedItem: DeploymentHistoryItem? {
+    private var selectedItem: DeploymentHistoryRecord? {
         let id = selectedItemID ?? store.history.first?.id
         return store.history.first { $0.id == id }
     }
@@ -31,9 +32,10 @@ struct HistoryView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if store.history.isEmpty {
-                    ContentUnavailableView("No History", systemImage: "clock")
+                    EmptyHistoryState()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(selection: $selectedItemID) {
@@ -77,7 +79,7 @@ struct HistoryView: View {
                         HStack(spacing: 8) {
                             MetadataChip(title: "Started", value: item.startedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
                             MetadataChip(title: "Duration", value: durationText(item), systemImage: "timer")
-                            MetadataChip(title: "Log", value: "\(item.log.count) chars", systemImage: "text.alignleft")
+                            MetadataChip(title: "Log", value: logLengthText(item), systemImage: "text.alignleft")
                         }
                     }
                     .padding(12)
@@ -93,22 +95,34 @@ struct HistoryView: View {
                         .padding(.vertical, 8)
                         .background(.bar)
 
-                        ConsoleTextView(text: item.log, placeholder: "No log captured.")
+                        ConsoleTextView(text: selectedLog, placeholder: "No log captured.")
                     }
                     .deploySurface()
                 }
                 .padding(14)
             } else {
-                ContentUnavailableView("No History", systemImage: "clock")
+                EmptyHistoryState()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onAppear {
             selectedItemID = selectedItemID ?? store.history.first?.id
+            loadSelectedLog()
+        }
+        .onChange(of: selectedItemID) { _, _ in
+            loadSelectedLog()
+        }
+        .onChange(of: store.history.map(\.id)) { _, _ in
+            if let selectedItemID, !store.history.contains(where: { $0.id == selectedItemID }) {
+                self.selectedItemID = store.history.first?.id
+            }
+            loadSelectedLog()
         }
         .confirmationDialog("Clear all deployment history?", isPresented: $showClearAllConfirmation, titleVisibility: .visible) {
             Button("Clear All History", role: .destructive) {
                 store.clearHistory()
                 selectedItemID = nil
+                selectedLog = ""
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -116,7 +130,7 @@ struct HistoryView: View {
         }
     }
 
-    private func durationText(_ item: DeploymentHistoryItem) -> String {
+    private func durationText(_ item: DeploymentHistoryRecord) -> String {
         let seconds = max(0, Int(item.finishedAt.timeIntervalSince(item.startedAt)))
         if seconds < 60 {
             return "\(seconds)s"
@@ -124,15 +138,46 @@ struct HistoryView: View {
         return "\(seconds / 60)m \(seconds % 60)s"
     }
 
+    private func logLengthText(_ item: DeploymentHistoryRecord) -> String {
+        if let count = item.logCharacterCount {
+            return "\(count) chars"
+        }
+        return selectedLog.isEmpty ? "On demand" : "\(selectedLog.count) chars"
+    }
+
+    private func loadSelectedLog() {
+        guard let item = selectedItem else {
+            selectedLog = ""
+            return
+        }
+        selectedLog = store.loadHistoryLog(for: item)
+    }
+
     private func deleteSelectedItem() {
         guard let item = selectedItem else { return }
         store.deleteHistory(item)
         selectedItemID = store.history.first?.id
+        loadSelectedLog()
+    }
+}
+
+private struct EmptyHistoryState: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "clock")
+                .font(.system(size: 38, weight: .regular))
+                .foregroundStyle(.tertiary)
+
+            Text("No History")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
 
 struct HistorySidebarRow: View {
-    let item: DeploymentHistoryItem
+    let item: DeploymentHistoryRecord
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {

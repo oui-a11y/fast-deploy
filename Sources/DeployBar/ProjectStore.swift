@@ -5,10 +5,11 @@ final class ProjectStore: ObservableObject {
     private static let maxHistoryLogCharacters = 120_000
 
     @Published var projects: [DeployProject] = []
-    @Published var history: [DeploymentHistoryItem] = []
+    @Published var history: [DeploymentHistoryRecord] = []
 
     private let projectsURL: URL
     private let historyURL: URL
+    private let historyLogsURL: URL
 
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -16,6 +17,8 @@ final class ProjectStore: ObservableObject {
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         projectsURL = support.appendingPathComponent("projects.json")
         historyURL = support.appendingPathComponent("history.json")
+        historyLogsURL = support.appendingPathComponent("history-logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: historyLogsURL, withIntermediateDirectories: true)
         load()
     }
 
@@ -37,7 +40,7 @@ final class ProjectStore: ObservableObject {
         } else {
             projects = []
         }
-        history = loadJSON([DeploymentHistoryItem].self, from: historyURL) ?? []
+        history = loadJSON([DeploymentHistoryRecord].self, from: historyURL) ?? []
     }
 
     func saveProjects() {
@@ -68,21 +71,33 @@ final class ProjectStore: ObservableObject {
         if cappedItem.log.count > Self.maxHistoryLogCharacters {
             cappedItem.log = String(cappedItem.log.suffix(Self.maxHistoryLogCharacters))
         }
-        history.insert(cappedItem, at: 0)
+
+        writeHistoryLog(cappedItem.log, for: cappedItem.id)
+        history.insert(DeploymentHistoryRecord(item: cappedItem), at: 0)
         if history.count > 50 {
+            let removedItems = history.dropFirst(50)
+            for item in removedItems {
+                deleteHistoryLog(for: item.id)
+            }
             history = Array(history.prefix(50))
         }
         saveHistory()
     }
 
-    func deleteHistory(_ item: DeploymentHistoryItem) {
+    func deleteHistory(_ item: DeploymentHistoryRecord) {
         history.removeAll { $0.id == item.id }
+        deleteHistoryLog(for: item.id)
         saveHistory()
     }
 
     func clearHistory() {
         history.removeAll()
+        deleteAllHistoryLogs()
         saveHistory()
+    }
+
+    func loadHistoryLog(for item: DeploymentHistoryRecord) -> String {
+        (try? String(contentsOf: historyLogURL(for: item.id), encoding: .utf8)) ?? ""
     }
 
     private func loadJSON<T: Decodable>(_ type: T.Type, from url: URL) -> T? {
@@ -98,5 +113,27 @@ final class ProjectStore: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(value) else { return }
         try? data.write(to: url, options: [.atomic])
+    }
+
+    private func historyLogURL(for id: UUID) -> URL {
+        historyLogsURL.appendingPathComponent("\(id.uuidString).log")
+    }
+
+    private func writeHistoryLog(_ log: String, for id: UUID) {
+        try? log.write(to: historyLogURL(for: id), atomically: true, encoding: .utf8)
+    }
+
+    private func deleteHistoryLog(for id: UUID) {
+        try? FileManager.default.removeItem(at: historyLogURL(for: id))
+    }
+
+    private func deleteAllHistoryLogs() {
+        guard let urls = try? FileManager.default.contentsOfDirectory(at: historyLogsURL, includingPropertiesForKeys: nil) else {
+            return
+        }
+
+        for url in urls {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }

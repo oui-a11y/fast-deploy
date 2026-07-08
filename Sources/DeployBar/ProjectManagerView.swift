@@ -150,7 +150,8 @@ struct ProjectEditorView: View {
                 EnvironmentTabBar(
                     project: $project,
                     selectedEnvironmentID: $selectedEnvironmentID,
-                    addEnvironment: addEnvironment
+                    addEnvironment: addEnvironment,
+                    duplicateEnvironment: duplicateEnvironment
                 )
 
                 if let index = selectedEnvironmentIndex {
@@ -199,6 +200,19 @@ struct ProjectEditorView: View {
         selectedEnvironmentID = environment.id
     }
 
+    private func duplicateEnvironment(_ source: DeployEnvironment) {
+        var environment = source
+        environment.id = UUID()
+        environment.name = uniqueEnvironmentName(basedOn: source.name)
+        environment.steps = source.steps.map { step in
+            var next = step
+            next.id = UUID()
+            return next
+        }
+        project.environments.append(environment)
+        selectedEnvironmentID = environment.id
+    }
+
     private func deleteSelectedEnvironment() {
         guard let id = selectedEnvironmentID else { return }
         project.environments.removeAll { $0.id == id }
@@ -217,6 +231,22 @@ struct ProjectEditorView: View {
         }
 
         selectedEnvironmentID = project.environments.first?.id
+    }
+
+    private func uniqueEnvironmentName(basedOn name: String) -> String {
+        let baseName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Environment" : name
+        let copyName = "\(baseName) copy"
+        let existingNames = Set(project.environments.map(\.name))
+
+        guard existingNames.contains(copyName) else {
+            return copyName
+        }
+
+        var suffix = 2
+        while existingNames.contains("\(copyName) \(suffix)") {
+            suffix += 1
+        }
+        return "\(copyName) \(suffix)"
     }
 }
 
@@ -257,6 +287,7 @@ struct EnvironmentTabBar: View {
     @Binding var project: DeployProject
     @Binding var selectedEnvironmentID: DeployEnvironment.ID?
     let addEnvironment: () -> Void
+    let duplicateEnvironment: (DeployEnvironment) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -283,7 +314,10 @@ struct EnvironmentTabBar: View {
                         ForEach(project.environments) { environment in
                             EnvironmentTab(
                                 environment: environment,
-                                isSelected: selectedEnvironmentID == environment.id
+                                isSelected: selectedEnvironmentID == environment.id,
+                                duplicateAction: {
+                                    duplicateEnvironment(environment)
+                                }
                             ) {
                                 selectedEnvironmentID = environment.id
                             }
@@ -300,6 +334,7 @@ struct EnvironmentTabBar: View {
 struct EnvironmentTab: View {
     let environment: DeployEnvironment
     let isSelected: Bool
+    let duplicateAction: () -> Void
     let action: () -> Void
 
     private var enabledStepCount: Int {
@@ -307,29 +342,44 @@ struct EnvironmentTab: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "scope")
-                    .foregroundStyle(isSelected ? DeployBarTheme.accent : .secondary)
+        HStack(spacing: 0) {
+            Button(action: action) {
+                HStack(spacing: 9) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "scope")
+                        .foregroundStyle(isSelected ? DeployBarTheme.accent : .secondary)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(environment.name.isEmpty ? "Environment" : environment.name)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                    HStack(spacing: 8) {
-                        Label("\(enabledStepCount)/\(environment.steps.count)", systemImage: "checklist")
-                        Label("\(environment.variables.count)", systemImage: "curlybraces")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(environment.name.isEmpty ? "Environment" : environment.name)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                        HStack(spacing: 8) {
+                            Label("\(enabledStepCount)/\(environment.steps.count)", systemImage: "checklist")
+                            Label("\(environment.variables.count)", systemImage: "curlybraces")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
                 }
+                .padding(.leading, 10)
+                .padding(.vertical, 8)
+                .frame(minWidth: 134, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(minWidth: 150, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .buttonStyle(.plain)
+
+            Divider()
+                .frame(height: 30)
+                .padding(.horizontal, 2)
+
+            Button(action: duplicateAction) {
+                Image(systemName: "doc.on.doc")
+                    .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Duplicate environment")
         }
-        .buttonStyle(.plain)
         .deploySurface(fill: isSelected ? DeployBarTheme.accent.opacity(0.10) : DeployBarTheme.panelRaised)
         .overlay {
             if isSelected {
