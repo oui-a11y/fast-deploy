@@ -26,6 +26,23 @@ The generated app is:
 The app bundle uses `LSUIElement = true`, so packaged runs appear in the macOS
 menu bar instead of the Dock.
 
+## GitHub Release
+
+Pushes to `main` run `.github/workflows/release.yml`.
+
+The workflow builds the release app on a macOS runner, packages it as:
+
+```text
+DeployBar.app.zip
+```
+
+It publishes the zip to a rolling GitHub Release named `DeployBar Latest` using
+the `latest` tag. The release also includes:
+
+```text
+DeployBar.app.zip.sha256
+```
+
 ## MVP Features
 
 - Menu bar panel built with SwiftUI `MenuBarExtra`.

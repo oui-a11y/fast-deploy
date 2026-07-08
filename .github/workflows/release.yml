@@ -1,0 +1,71 @@
+name: Build Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    name: Build macOS app and publish release
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build app bundle
+        run: scripts/build-app.sh
+
+      - name: Package app zip
+        run: |
+          mkdir -p dist
+          ditto -c -k --keepParent ".build/DeployBar.app" "dist/DeployBar.app.zip"
+          shasum -a 256 "dist/DeployBar.app.zip" > "dist/DeployBar.app.zip.sha256"
+
+      - name: Update rolling tag
+        run: |
+          git tag -f latest "$GITHUB_SHA"
+          git push origin latest --force
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_notes="$(cat <<EOF
+          Automated build from main.
+
+          Commit: $GITHUB_SHA
+          Branch: $GITHUB_REF_NAME
+          EOF
+          )"
+
+          if gh release view latest >/dev/null 2>&1; then
+            gh release edit latest \
+              --title "DeployBar Latest" \
+              --notes "$release_notes" \
+              --latest
+          else
+            gh release create latest \
+              --title "DeployBar Latest" \
+              --notes "$release_notes" \
+              --latest
+          fi
+
+          gh release upload latest \
+            "dist/DeployBar.app.zip" \
+            "dist/DeployBar.app.zip.sha256" \
+            --clobber
