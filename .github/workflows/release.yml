@@ -2,15 +2,15 @@ name: Build Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-main
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -43,40 +43,37 @@ jobs:
 
       - name: Package app zip
         run: |
+          version="${GITHUB_REF_NAME}"
           mkdir -p dist
-          ditto -c -k --keepParent ".build/DeployBar.app" "dist/DeployBar.app.zip"
-          shasum -a 256 "dist/DeployBar.app.zip" > "dist/DeployBar.app.zip.sha256"
-
-      - name: Update rolling tag
-        run: |
-          git tag -f latest "$GITHUB_SHA"
-          git push origin latest --force
+          ditto -c -k --keepParent ".build/DeployBar.app" "dist/DeployBar-${version}.app.zip"
+          shasum -a 256 "dist/DeployBar-${version}.app.zip" > "dist/DeployBar-${version}.app.zip.sha256"
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          version="$GITHUB_REF_NAME"
           release_notes="$(cat <<EOF
-          Automated build from main.
+          DeployBar ${version}
 
           Commit: $GITHUB_SHA
-          Branch: $GITHUB_REF_NAME
+          Tag: ${version}
           EOF
           )"
 
-          if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest \
-              --title "DeployBar Latest" \
+          if gh release view "${version}" >/dev/null 2>&1; then
+            gh release edit "${version}" \
+              --title "DeployBar ${version}" \
               --notes "$release_notes" \
               --latest
           else
-            gh release create latest \
-              --title "DeployBar Latest" \
+            gh release create "${version}" \
+              --title "DeployBar ${version}" \
               --notes "$release_notes" \
               --latest
           fi
 
-          gh release upload latest \
-            "dist/DeployBar.app.zip" \
-            "dist/DeployBar.app.zip.sha256" \
+          gh release upload "${version}" \
+            "dist/DeployBar-${version}.app.zip" \
+            "dist/DeployBar-${version}.app.zip.sha256" \
             --clobber

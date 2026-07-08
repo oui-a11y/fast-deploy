@@ -28,19 +28,21 @@ menu bar instead of the Dock.
 
 ## GitHub Release
 
-Pushes to `main` run `.github/workflows/release.yml`.
+Version tags run `.github/workflows/release.yml`.
 
-The workflow builds the release app on a macOS runner, packages it as:
+Create and push a tag like:
 
-```text
-DeployBar.app.zip
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-It publishes the zip to a rolling GitHub Release named `DeployBar Latest` using
-the `latest` tag. The release also includes:
+The workflow builds the release app on a macOS runner, publishes a GitHub
+Release for that tag, and uploads:
 
 ```text
-DeployBar.app.zip.sha256
+DeployBar-v0.1.0.app.zip
+DeployBar-v0.1.0.app.zip.sha256
 ```
 
 ## MVP Features
